@@ -1,24 +1,74 @@
 const Opossum = require("opossum");
 
 class CircuitBreaker{
-    constructor(action, options, resetTimeLimit, retryNum){
-        this.action = action;
-        this.options = options;
-        this.resetTimeLimit = resetTimeLimit;
-        this.retryNum = retryNum;
-        this.totalTries = 0;
+    constructor({func, errorThresholdPercentage, timeout, resetTimeOut, totalTries, retryTime}){
         
-        this.breaker = new Opossum(this.action, this.options);
+        this.breaker = new Opossum(func, {
+            timeout: timeout,
+            errorThresholdPercentage: errorThresholdPercentage,
+            resetTimeout: resetTimeOut
+        });
+
+        this.totalTries = totalTries;
+        this.resetTimeOut = resetTimeOut;
+        this.retryTime = retryTime;
     }
 
     async fire(){
-        return new Promise( async(resolve, reject)=>{
             try{
-                resolve(await this.breaker.fire());
+                let res = await this.breaker.fire();
+                return {"status": 1, "data": res};
             }catch(e){
-                reject(e);
+                return {"status": 0, "error": e.message};
+            }ac
+    }
+
+    async run(){
+        // let res = await this.fire();
+        // if(res["status"]==1){
+        //     return res;
+        // }
+
+        // let i=1;
+        // let intervalId = setInterval(async ()=>{
+        //     res = await this.fire();
+        //     if(res["status"]==1){
+        //         clearInterval(intervalId);
+        //         return res;
+        //     }
+        //     i++;
+        //     if(i>=this.totalTries){
+        //         clearInterval(intervalId);
+        //         return res;
+        //     }
+        // }, this.resetTimeOut);
+
+        return new Promise(async (resolve, reject)=>{
+            let res = await this.fire();
+            console.log(res["status"])
+            if(res["status"]==1){
+                resolve(res["data"]);
             }
-        });
+            else if(this.totalTries<=1){
+                reject(res["error"]);
+            }
+            else{
+                let i=1
+                let intervalId = setInterval(async ()=>{
+                    res = await this.fire();
+                    console.log(res["status"])
+                    if(res["status"]==1){
+                        clearInterval(intervalId);
+                        resolve(res["data"]);
+                    }
+                    i++;
+                    if(i>=this.totalTries){
+                        clearInterval(intervalId);
+                        reject(res["error"]);
+                    }
+                }, this.retryTime)
+            }
+        })
     }
 }
 
